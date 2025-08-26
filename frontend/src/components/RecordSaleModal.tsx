@@ -1,0 +1,217 @@
+import React, { useState } from 'react';
+import { X, ShoppingCart } from 'lucide-react';
+import { useInventory } from '../contexts/InventoryContext';
+import { useSales } from '../contexts/SalesContext';
+import { formatCurrency } from '../utils/currency';
+
+interface RecordSaleModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClose }) => {
+  const { items, updateStock } = useInventory();
+  const { recordSale } = useSales();
+  const [selectedItemId, setSelectedItemId] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  const selectedItem = items.find(item => item.id === selectedItemId);
+  const total = selectedItem ? selectedItem.sellingPrice * quantity : 0;
+  const profit = selectedItem ? (selectedItem.sellingPrice - selectedItem.costPrice) * quantity : 0;
+
+  const handleInputChange = (field: string, value: string | number) => {
+    if (field === 'itemId') {
+      setSelectedItemId(value as string);
+    } else if (field === 'quantity') {
+      setQuantity(value as number);
+    }
+    
+    // Clear error when user makes changes
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors: { [key: string]: string } = {};
+
+    if (!selectedItemId) {
+      newErrors.itemId = 'Please select an item';
+    }
+    if (quantity <= 0) {
+      newErrors.quantity = 'Quantity must be greater than 0';
+    }
+    if (selectedItem && quantity > selectedItem.quantity) {
+      newErrors.quantity = `Not enough stock. Available: ${selectedItem.quantity}`;
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (validateForm() && selectedItem) {
+      // Record the sale
+      recordSale({
+        itemId: selectedItem.id,
+        itemName: selectedItem.name,
+        quantity,
+        unitPrice: selectedItem.sellingPrice,
+        costPrice: selectedItem.costPrice,
+        total,
+        profit
+      });
+
+      // Update inventory
+      updateStock(selectedItem.id, -quantity);
+
+      // Reset form
+      setSelectedItemId('');
+      setQuantity(1);
+      setErrors({});
+      onClose();
+    }
+  };
+
+  const availableItems = items.filter(item => item.quantity > 0);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center">
+            <ShoppingCart className="h-6 w-6 text-green-600 mr-2" />
+            <h2 className="text-xl font-semibold text-gray-900">Record Sale</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Select Item *
+            </label>
+            <select
+              value={selectedItemId}
+              onChange={(e) => handleInputChange('itemId', e.target.value)}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
+                errors.itemId ? 'border-red-500' : 'border-gray-300'
+              }`}
+            >
+              <option value="">Choose an item</option>
+              {availableItems.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.name} - {formatCurrency(item.sellingPrice)} (Stock: {item.quantity})
+                </option>
+              ))}
+            </select>
+            {errors.itemId && <p className="text-red-500 text-xs mt-1">{errors.itemId}</p>}
+          </div>
+
+          {availableItems.length === 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <p className="text-sm text-yellow-700">
+                No items available for sale. Please add inventory first.
+              </p>
+            </div>
+          )}
+
+          {selectedItem && (
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Item:</span>
+                  <span className="font-medium text-gray-900">{selectedItem.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Category:</span>
+                  <span className="text-gray-900">{selectedItem.category}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Available Stock:</span>
+                  <span className="text-gray-900">{selectedItem.quantity} units</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Unit Price:</span>
+                  <span className="font-medium text-green-600">{formatCurrency(selectedItem.sellingPrice)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Quantity *
+            </label>
+            <input
+              type="number"
+              min="1"
+              max={selectedItem?.quantity || 1}
+              value={quantity}
+              onChange={(e) => handleInputChange('quantity', parseInt(e.target.value) || 1)}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
+                errors.quantity ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="1"
+            />
+            {errors.quantity && <p className="text-red-500 text-xs mt-1">{errors.quantity}</p>}
+          </div>
+
+          {selectedItem && quantity > 0 && (
+            <div className="bg-green-50 p-4 rounded-lg">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Unit Price:</span>
+                  <span className="text-gray-900">{formatCurrency(selectedItem.sellingPrice)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Quantity:</span>
+                  <span className="text-gray-900">{quantity}</span>
+                </div>
+                <div className="border-t border-green-200 pt-2">
+                  <div className="flex justify-between text-base font-semibold">
+                    <span className="text-gray-900">Total Amount:</span>
+                    <span className="text-green-600">{formatCurrency(total)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Profit:</span>
+                    <span className="text-green-600">+{formatCurrency(profit)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={availableItems.length === 0}
+              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              Record Sale
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default RecordSaleModal;
