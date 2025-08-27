@@ -64,6 +64,30 @@ router.post('/register', validateUserRegistration, asyncHandler(async (req, res)
   }, 201);
 }));
 
+// Create demo user if it doesn't exist
+router.post('/create-demo', asyncHandler(async (req, res) => {
+  const demoEmail = 'demo@gebeyanet.com';
+  
+  // Check if demo user already exists
+  const existingDemo = await query('SELECT id FROM users WHERE email = ?', [demoEmail]);
+  
+  if (existingDemo.length > 0) {
+    return successResponse(res, 'Demo user already exists');
+  }
+  
+  // Create demo user
+  const password_hash = await bcrypt.hash('demo123', 12);
+  const uuid = uuidv4();
+  
+  await query(
+    `INSERT INTO users (uuid, business_name, owner_name, email, phone, password_hash, business_address, business_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [uuid, 'Demo Store', 'Demo User', demoEmail, '+251-911-000000', password_hash, 'Demo Address, Addis Ababa', 'retail']
+  );
+  
+  successResponse(res, 'Demo user created successfully');
+}));
+
 // @route   POST /api/auth/login
 // @desc    Login user
 // @access  Public

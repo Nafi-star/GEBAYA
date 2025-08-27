@@ -66,6 +66,19 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Create demo user endpoint
+app.post('/create-demo', async (req, res) => {
+  try {
+    const response = await fetch('http://localhost:5000/api/auth/create-demo', {
+      method: 'POST'
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create demo user' });
+  }
+});
+
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);

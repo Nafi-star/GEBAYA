@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   Home, 
   Package, 
@@ -9,7 +10,9 @@ import {
   Settings, 
   Menu, 
   X,
-  Bell
+  Bell,
+  LogOut,
+  User
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -17,8 +20,10 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { user, logout } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: Home },
@@ -31,6 +36,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const handleLogout = () => {
+    logout();
   };
 
   return (
@@ -46,6 +55,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <h1 className="ml-3 text-xl font-bold text-white">GebeyaNet</h1>
             </div>
           </div>
+          
+          {/* Mobile User Info */}
+          <div className="px-4 mt-4 pb-4 border-b border-green-700">
+            <div className="text-green-100 text-sm">
+              <p className="font-medium">{user?.business_name}</p>
+              <p className="text-green-200 text-xs">{user?.owner_name}</p>
+            </div>
+          </div>
+          
+          
+          {/* User Info */}
+          <div className="px-4 mt-4 pb-4 border-b border-green-700">
+            <div className="text-green-100 text-sm">
+              <p className="font-medium">{user?.business_name}</p>
+              <p className="text-green-200 text-xs">{user?.owner_name}</p>
+            </div>
+          </div>
+          
           <nav className="mt-8 flex-grow flex flex-col">
             <ul className="flex-1 px-2 space-y-1">
               {navigation.map((item) => {
@@ -69,6 +96,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               })}
             </ul>
           </nav>
+          
+          {/* Logout Button */}
+          <div className="px-2 pb-4">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center px-2 py-2 text-sm font-medium text-green-100 hover:bg-green-700 hover:text-white rounded-md transition-colors duration-200"
+            >
+              <LogOut className="mr-3 flex-shrink-0 h-5 w-5" />
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
 
@@ -117,6 +155,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 })}
               </nav>
             </div>
+            
+            {/* Mobile Logout */}
+            <div className="px-2 pb-4 mt-4">
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center px-2 py-2 text-base font-medium text-green-100 hover:bg-green-700 hover:text-white rounded-md transition-colors duration-200"
+              >
+                <LogOut className="mr-4 h-5 w-5" />
+                Sign Out
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -140,9 +189,29 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </div>
                 <h1 className="ml-2 text-lg font-bold text-gray-900">GebeyaNet</h1>
               </div>
-              <button className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
-                <Bell className="h-5 w-5" />
-              </button>
+              <div className="flex items-center space-x-2">
+                <button className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
+                  <Bell className="h-5 w-5" />
+                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                    className="flex items-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+                  >
+                    <User className="h-5 w-5" />
+                  </button>
+                  {isUserMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                      <button
+                        onClick={handleLogout}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -156,9 +225,29 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   {location.pathname === '/' ? 'Dashboard' : location.pathname.slice(1)}
                 </h2>
               </div>
-              <button className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
-                <Bell className="h-5 w-5" />
-              </button>
+              <div className="flex items-center space-x-2">
+                <button className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
+                  <Bell className="h-5 w-5" />
+                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                    className="flex items-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+                  >
+                    <User className="h-5 w-5" />
+                  </button>
+                  {isUserMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                      <button
+                        onClick={handleLogout}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
