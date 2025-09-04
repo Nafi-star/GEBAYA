@@ -92,3 +92,20 @@ export const getExpiryStatusText = (daysUntilExpiry: number): string => {
   if (daysUntilExpiry === 1) return 'Expires tomorrow';
   return `Expires in ${daysUntilExpiry} days`;
 };
+
+// Additional exports for RecordSaleModal compatibility
+export const getExpiryStatus = (expiryDate: string): 'expired' | 'expiring' | 'fresh' => {
+  const daysUntil = calculateDaysUntilExpiry(expiryDate);
+  if (daysUntil < 0) return 'expired';
+  if (daysUntil <= 7) return 'expiring';
+  return 'fresh';
+};
+
+export const getDaysUntilExpiry = calculateDaysUntilExpiry;
+
+export const getPriorityLevel = (expiryDate: string): 'High' | 'Medium' | 'Low' => {
+  const daysUntil = calculateDaysUntilExpiry(expiryDate);
+  if (daysUntil < 0 || daysUntil <= 3) return 'High';
+  if (daysUntil <= 7) return 'Medium';
+  return 'Low';
+};
