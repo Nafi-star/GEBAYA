@@ -1,4 +1,7 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> bcc6d6ac8cd29f47f948c8a6e27541f904dd260d
 # GebeyaNet Backend API
 
 Ethiopian Retail Inventory Platform - Backend API built with Node.js, Express, and MySQL.
@@ -15,11 +18,27 @@ Ethiopian Retail Inventory Platform - Backend API built with Node.js, Express, a
 ## 📋 Prerequisites
 
 - Node.js (v16 or higher)
+<<<<<<< HEAD
 - MySQL/xampp (v8.0 or higher)
+=======
+- MySQL (v8.0 or higher)
+>>>>>>> bcc6d6ac8cd29f47f948c8a6e27541f904dd260d
 - npm or yarn package manager
 
 ## 🛠 Installation & Setup
 
+<<<<<<< HEAD
+=======
+### 1. Clone and Install Dependencies
+
+```bash
+# Navigate to backend directory
+cd backend
+
+# Install dependencies
+npm install
+```
+>>>>>>> bcc6d6ac8cd29f47f948c8a6e27541f904dd260d
 
 ### 2. Database Setup
 
@@ -384,6 +403,9 @@ MIT License - see LICENSE file for details.
 ---
 
 **GebeyaNet Backend API** - Empowering Ethiopian retailers with modern inventory management technology. 🇪🇹
+<<<<<<< HEAD
 =======
 # GEBAYA
 >>>>>>> 036d1e759f6bc7166ac258dd5616a3845945ed8e
+=======
+>>>>>>> bcc6d6ac8cd29f47f948c8a6e27541f904dd260d
