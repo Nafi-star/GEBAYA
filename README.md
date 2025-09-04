@@ -1,7 +1,4 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> bcc6d6ac8cd29f47f948c8a6e27541f904dd260d
+
 # GebeyaNet Backend API
 
 Ethiopian Retail Inventory Platform - Backend API built with Node.js, Express, and MySQL.
