@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # GebeyaNet Backend API
 
 Ethiopian Retail Inventory Platform - Backend API built with Node.js, Express, and MySQL.
@@ -383,3 +384,6 @@ MIT License - see LICENSE file for details.
 ---
 
 **GebeyaNet Backend API** - Empowering Ethiopian retailers with modern inventory management technology. 🇪🇹
+=======
+# GEBAYA
+>>>>>>> 036d1e759f6bc7166ac258dd5616a3845945ed8e
