@@ -15,7 +15,10 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose }) => {
     quantity: 0,
     costPrice: 0,
     sellingPrice: 0,
-    minThreshold: 5
+    minThreshold: 5,
+    expiryDate: '',
+    batchNumber: '',
+    supplier: ''
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
@@ -83,7 +86,10 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose }) => {
         quantity: 0,
         costPrice: 0,
         sellingPrice: 0,
-        minThreshold: 5
+        minThreshold: 5,
+        expiryDate: '',
+        batchNumber: '',
+        supplier: ''
       });
       setErrors({});
       onClose();
@@ -215,6 +221,46 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose }) => {
                 placeholder="0.00"
               />
               {errors.sellingPrice && <p className="text-red-500 text-xs mt-1">{errors.sellingPrice}</p>}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Expiry Date (Optional)
+            </label>
+            <input
+              type="date"
+              value={formData.expiryDate}
+              onChange={(e) => handleInputChange('expiryDate', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Batch Number (Optional)
+              </label>
+              <input
+                type="text"
+                value={formData.batchNumber}
+                onChange={(e) => handleInputChange('batchNumber', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                placeholder="e.g., BT001"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Supplier (Optional)
+              </label>
+              <input
+                type="text"
+                value={formData.supplier}
+                onChange={(e) => handleInputChange('supplier', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                placeholder="Supplier name"
+              />
             </div>
           </div>
 

@@ -1,211 +1,283 @@
-import React, { useState } from 'react';
-import { X, ShoppingCart } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Search, AlertTriangle, Clock, Package } from 'lucide-react';
 import { useInventory } from '../contexts/InventoryContext';
-import { useSales } from '../contexts/SalesContext';
-import { formatCurrency } from '../utils/currency';
+import { InventoryItem } from '../types/inventory';
+import { getExpiryStatus, getDaysUntilExpiry, getPriorityLevel } from '../utils/expiryUtils';
 
 interface RecordSaleModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClose }) => {
-  const { items, updateStock } = useInventory();
-  const { recordSale } = useSales();
-  const [selectedItemId, setSelectedItemId] = useState('');
+export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClose }) => {
+  const { items, recordSale } = useInventory();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [unitPrice, setUnitPrice] = useState(0);
+  const [customerName, setCustomerName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const selectedItem = items.find(item => item.id === selectedItemId);
-  const total = selectedItem ? selectedItem.sellingPrice * quantity : 0;
-  const profit = selectedItem ? (selectedItem.sellingPrice - selectedItem.costPrice) * quantity : 0;
-
-  const handleInputChange = (field: string, value: string | number) => {
-    if (field === 'itemId') {
-      setSelectedItemId(value as string);
-    } else if (field === 'quantity') {
-      setQuantity(value as number);
-    }
+  // Sort items by priority (expired/expiring first)
+  const sortedItems = [...items].sort((a, b) => {
+    const aPriority = getPriorityLevel(a.expiryDate);
+    const bPriority = getPriorityLevel(b.expiryDate);
     
-    // Clear error when user makes changes
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
-  };
+    // Convert priority to numeric for sorting (High=3, Medium=2, Low=1)
+    const priorityValues = { 'High': 3, 'Medium': 2, 'Low': 1 };
+    return priorityValues[bPriority] - priorityValues[aPriority];
+  });
 
-  const validateForm = () => {
-    const newErrors: { [key: string]: string } = {};
+  const filteredItems = sortedItems.filter(item =>
+    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.category.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-    if (!selectedItemId) {
-      newErrors.itemId = 'Please select an item';
+  useEffect(() => {
+    if (selectedItem) {
+      setUnitPrice(selectedItem.price);
     }
-    if (quantity <= 0) {
-      newErrors.quantity = 'Quantity must be greater than 0';
-    }
-    if (selectedItem && quantity > selectedItem.quantity) {
-      newErrors.quantity = `Not enough stock. Available: ${selectedItem.quantity}`;
-    }
+  }, [selectedItem]);
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (validateForm() && selectedItem) {
-      // Record the sale
-      recordSale({
+    if (!selectedItem || quantity <= 0) return;
+
+    setIsSubmitting(true);
+    try {
+      await recordSale({
         itemId: selectedItem.id,
-        itemName: selectedItem.name,
         quantity,
-        unitPrice: selectedItem.sellingPrice,
-        costPrice: selectedItem.costPrice,
-        total,
-        profit
+        unitPrice,
+        customerName: customerName.trim() || 'Walk-in Customer',
+        timestamp: new Date(),
+        totalAmount: quantity * unitPrice
       });
 
-      // Update inventory
-      updateStock(selectedItem.id, -quantity);
-
       // Reset form
-      setSelectedItemId('');
+      setSelectedItem(null);
       setQuantity(1);
-      setErrors({});
+      setUnitPrice(0);
+      setCustomerName('');
+      setSearchTerm('');
       onClose();
+    } catch (error) {
+      console.error('Error recording sale:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const availableItems = items.filter(item => item.quantity > 0);
+  const getExpiryWarning = (item: InventoryItem) => {
+    const status = getExpiryStatus(item.expiryDate);
+    const daysUntil = getDaysUntilExpiry(item.expiryDate);
+    
+    if (status === 'expired') {
+      return {
+        message: 'This item has expired!',
+        color: 'text-red-600',
+        bgColor: 'bg-red-50',
+        icon: AlertTriangle
+      };
+    } else if (status === 'expiring') {
+      return {
+        message: `Expires in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`,
+        color: 'text-orange-600',
+        bgColor: 'bg-orange-50',
+        icon: Clock
+      };
+    }
+    return null;
+  };
+
+  const getPriorityBadge = (priority: string) => {
+    const colors = {
+      'High': 'bg-red-100 text-red-800',
+      'Medium': 'bg-orange-100 text-orange-800',
+      'Low': 'bg-green-100 text-green-800'
+    };
+    return colors[priority as keyof typeof colors] || colors.Low;
+  };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center">
-            <ShoppingCart className="h-6 w-6 text-green-600 mr-2" />
-            <h2 className="text-xl font-semibold text-gray-900">Record Sale</h2>
-          </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Record Sale</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
+            className="text-gray-500 hover:text-gray-700 transition-colors"
           >
-            <X className="h-6 w-6" />
+            <X className="w-6 h-6" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Item Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Select Item *
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Item
             </label>
-            <select
-              value={selectedItemId}
-              onChange={(e) => handleInputChange('itemId', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
-                errors.itemId ? 'border-red-500' : 'border-gray-300'
-              }`}
-            >
-              <option value="">Choose an item</option>
-              {availableItems.map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.name} - {formatCurrency(item.sellingPrice)} (Stock: {item.quantity})
-                </option>
-              ))}
-            </select>
-            {errors.itemId && <p className="text-red-500 text-xs mt-1">{errors.itemId}</p>}
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search items..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg">
+              {filteredItems.length === 0 ? (
+                <div className="p-4 text-center text-gray-500">
+                  <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  No items found
+                </div>
+              ) : (
+                filteredItems.map((item) => {
+                  const warning = getExpiryWarning(item);
+                  const priority = getPriorityLevel(item.expiryDate);
+                  
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => setSelectedItem(item)}
+                      className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
+                        selectedItem?.id === item.id ? 'bg-blue-50 border-blue-200' : ''
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-medium text-gray-800">{item.name}</h3>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityBadge(priority)}`}>
+                              {priority}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600">
+                            Stock: {item.quantity} | Price: ${item.price.toFixed(2)}
+                          </p>
+                          {item.expiryDate && (
+                            <p className="text-xs text-gray-500">
+                              Expires: {new Date(item.expiryDate).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                        {warning && (
+                          <div className={`flex items-center gap-1 px-2 py-1 rounded-md ${warning.bgColor}`}>
+                            <warning.icon className={`w-4 h-4 ${warning.color}`} />
+                            <span className={`text-xs ${warning.color}`}>
+                              {warning.message}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
 
-          {availableItems.length === 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <p className="text-sm text-yellow-700">
-                No items available for sale. Please add inventory first.
-              </p>
-            </div>
-          )}
-
+          {/* Sale Details */}
           {selectedItem && (
-            <div className="bg-gray-50 p-3 rounded-lg">
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Item:</span>
-                  <span className="font-medium text-gray-900">{selectedItem.name}</span>
+            <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+              <h3 className="font-medium text-gray-800">Sale Details for: {selectedItem.name}</h3>
+              
+              {/* Expiry Warning */}
+              {(() => {
+                const warning = getExpiryWarning(selectedItem);
+                if (warning) {
+                  return (
+                    <div className={`flex items-center gap-2 p-3 rounded-lg ${warning.bgColor}`}>
+                      <warning.icon className={`w-5 h-5 ${warning.color}`} />
+                      <span className={`font-medium ${warning.color}`}>
+                        {warning.message}
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Quantity
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={selectedItem.quantity}
+                    value={quantity}
+                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Available: {selectedItem.quantity}
+                  </p>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Category:</span>
-                  <span className="text-gray-900">{selectedItem.category}</span>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Unit Price ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={unitPrice}
+                    onChange={(e) => setUnitPrice(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Available Stock:</span>
-                  <span className="text-gray-900">{selectedItem.quantity} units</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Unit Price:</span>
-                  <span className="font-medium text-green-600">{formatCurrency(selectedItem.sellingPrice)}</span>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Customer Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Enter customer name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="bg-white p-3 rounded-lg border">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-700">Total Amount:</span>
+                  <span className="text-xl font-bold text-green-600">
+                    ${(quantity * unitPrice).toFixed(2)}
+                  </span>
                 </div>
               </div>
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Quantity *
-            </label>
-            <input
-              type="number"
-              min="1"
-              max={selectedItem?.quantity || 1}
-              value={quantity}
-              onChange={(e) => handleInputChange('quantity', parseInt(e.target.value) || 1)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
-                errors.quantity ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="1"
-            />
-            {errors.quantity && <p className="text-red-500 text-xs mt-1">{errors.quantity}</p>}
-          </div>
-
-          {selectedItem && quantity > 0 && (
-            <div className="bg-green-50 p-4 rounded-lg">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Unit Price:</span>
-                  <span className="text-gray-900">{formatCurrency(selectedItem.sellingPrice)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Quantity:</span>
-                  <span className="text-gray-900">{quantity}</span>
-                </div>
-                <div className="border-t border-green-200 pt-2">
-                  <div className="flex justify-between text-base font-semibold">
-                    <span className="text-gray-900">Total Amount:</span>
-                    <span className="text-green-600">{formatCurrency(total)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Profit:</span>
-                    <span className="text-green-600">+{formatCurrency(profit)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex space-x-3 pt-4">
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={availableItems.length === 0}
-              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              disabled={!selectedItem || quantity <= 0 || isSubmitting}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
-              Record Sale
+              {isSubmitting ? 'Recording...' : 'Record Sale'}
             </button>
           </div>
         </form>
@@ -213,5 +285,3 @@ const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClose }) =>
     </div>
   );
 };
-
-export default RecordSaleModal;

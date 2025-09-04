@@ -1,234 +1,148 @@
 import React from 'react';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Package, 
-  ShoppingCart, 
-  AlertTriangle,
-  DollarSign,
-  Eye,
-  Plus
-} from 'lucide-react';
 import { useInventory } from '../contexts/InventoryContext';
 import { useSales } from '../contexts/SalesContext';
-import { formatCurrency } from '../utils/currency';
+import { Package, TrendingUp, AlertTriangle, DollarSign, ShoppingCart, Calendar } from 'lucide-react';
+import { ExpiryAlertsPanel } from '../components/ExpiryAlertsPanel';
+import { AutomationPanel } from '../components/AutomationPanel';
+import { SmartSalesRecommendations } from '../components/SmartSalesRecommendations';
+import { getExpiryStatus, getDaysUntilExpiry } from '../utils/expiryUtils';
 
-const Dashboard: React.FC = () => {
-  const { items, getLowStockItems } = useInventory();
-  const { sales, getTodaysSales, getWeeklySales, getTodaysProfit } = useSales();
+export default function Dashboard() {
+  const { items } = useInventory();
+  const { sales } = useSales();
 
-  const lowStockItems = getLowStockItems();
-  const todaysSales = getTodaysSales();
-  const weeklySales = getWeeklySales();
-  const todaysProfit = getTodaysProfit();
-  const totalItemsValue = items.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0);
+  // Calculate metrics
+  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+  const lowStockItems = items.filter(item => item.quantity <= item.minStock);
+  const expiredItems = items.filter(item => getExpiryStatus(item.expiryDate) === 'expired');
+  const expiringItems = items.filter(item => {
+    const status = getExpiryStatus(item.expiryDate);
+    return status === 'expiring-soon' || status === 'expiring-today';
+  });
 
-  const stats = [
+  // Calculate today's sales and profit
+  const today = new Date().toDateString();
+  const todaySales = sales.filter(sale => new Date(sale.date).toDateString() === today);
+  const todayRevenue = todaySales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+  const todayItemsSold = todaySales.reduce((sum, sale) => sum + sale.quantity, 0);
+  
+  // Calculate profit (assuming 30% markup)
+  const todayProfit = todayRevenue * 0.3;
+  const totalRevenue = sales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+  const totalProfit = totalRevenue * 0.3;
+
+  const metrics = [
     {
-      title: 'Today\'s Sales',
-      value: formatCurrency(todaysSales.reduce((sum, sale) => sum + sale.total, 0)),
-      change: '+12%',
-      changeType: 'positive',
-      icon: ShoppingCart,
+      title: 'Total Items',
+      value: totalItems.toString(),
+      icon: Package,
       color: 'bg-blue-500',
+      change: '+12%'
     },
     {
-      title: 'Today\'s Profit',
-      value: formatCurrency(todaysProfit),
-      change: '+8%',
-      changeType: 'positive',
+      title: "Today's Profit",
+      value: `${todayProfit.toFixed(2)} ETB`,
       icon: DollarSign,
       color: 'bg-green-500',
+      change: '+8%'
     },
     {
-      title: 'Total Inventory Value',
-      value: formatCurrency(totalItemsValue),
-      change: '0%',
-      changeType: 'neutral',
-      icon: Package,
-      color: 'bg-yellow-500',
+      title: 'Items Sold Today',
+      value: todayItemsSold.toString(),
+      icon: ShoppingCart,
+      color: 'bg-purple-500',
+      change: '+15%'
     },
     {
-      title: 'Low Stock Items',
+      title: 'Low Stock Alerts',
       value: lowStockItems.length.toString(),
-      change: lowStockItems.length > 0 ? 'Needs attention' : 'All good',
-      changeType: lowStockItems.length > 0 ? 'negative' : 'positive',
       icon: AlertTriangle,
-      color: lowStockItems.length > 0 ? 'bg-red-500' : 'bg-green-500',
+      color: 'bg-yellow-500',
+      change: '-5%'
     },
+    {
+      title: 'Expired Items',
+      value: expiredItems.length.toString(),
+      icon: Calendar,
+      color: 'bg-red-500',
+      change: 'urgent'
+    },
+    {
+      title: 'Total Profit',
+      value: `${totalProfit.toFixed(2)} ETB`,
+      icon: TrendingUp,
+      color: 'bg-indigo-500',
+      change: '+23%'
+    }
   ];
 
   return (
     <div className="space-y-6">
-      {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-green-600 to-green-800 rounded-lg p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2">Welcome to GebeyaNet! 🇪🇹</h1>
-        <p className="text-green-100">
-          Your digital partner for smart inventory management and business growth
-        </p>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-600 mt-1">Welcome back! Here's what's happening with your inventory.</p>
+        </div>
+        <div className="text-right">
+          <p className="text-sm text-gray-500">Last updated</p>
+          <p className="text-lg font-semibold text-gray-900">{new Date().toLocaleTimeString()}</p>
+        </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div
-              key={stat.title}
-              className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-200"
-            >
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className={`${stat.color} p-3 rounded-md`}>
-                      <Icon className="h-6 w-6 text-white" />
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">
-                        {stat.title}
-                      </dt>
-                      <dd className="text-lg font-semibold text-gray-900">
-                        {stat.value}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <div className="flex items-center text-sm">
-                    {stat.changeType === 'positive' ? (
-                      <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-                    ) : stat.changeType === 'negative' ? (
-                      <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
-                    ) : null}
-                    <span
-                      className={
-                        stat.changeType === 'positive'
-                          ? 'text-green-600'
-                          : stat.changeType === 'negative'
-                          ? 'text-red-600'
-                          : 'text-gray-500'
-                      }
-                    >
-                      {stat.change}
-                    </span>
-                  </div>
-                </div>
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {metrics.map((metric, index) => (
+          <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">{metric.title}</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{metric.value}</p>
+              </div>
+              <div className={`${metric.color} p-3 rounded-lg`}>
+                <metric.icon className="w-6 h-6 text-white" />
               </div>
             </div>
-          );
-        })}
+            <div className="mt-4 flex items-center">
+              <span className={`text-sm font-medium ${
+                metric.change === 'urgent' ? 'text-red-600' : 
+                metric.change.startsWith('+') ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {metric.change === 'urgent' ? '⚠️ Needs attention' : metric.change}
+              </span>
+              <span className="text-sm text-gray-500 ml-1">vs last week</span>
+            </div>
+          </div>
+        ))}
       </div>
 
+      {/* Alerts and Automation Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Sales */}
-        <div className="bg-white shadow-lg rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Recent Sales</h3>
-              <button className="text-green-600 hover:text-green-700 text-sm font-medium">
-                View all
-              </button>
-            </div>
-          </div>
-          <div className="px-6 py-4">
-            {todaysSales.length > 0 ? (
-              <div className="space-y-4">
-                {todaysSales.slice(0, 5).map((sale) => (
-                  <div key={sale.id} className="flex items-center justify-between py-2">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{sale.itemName}</p>
-                      <p className="text-xs text-gray-500">
-                        Qty: {sale.quantity} × {formatCurrency(sale.unitPrice)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-900">
-                        {formatCurrency(sale.total)}
-                      </p>
-                      <p className="text-xs text-green-600">
-                        +{formatCurrency(sale.profit)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <ShoppingCart className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                <p>No sales recorded today</p>
-                <p className="text-sm">Start recording sales to see them here</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Low Stock Alert */}
-        <div className="bg-white shadow-lg rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Stock Alerts</h3>
-              {lowStockItems.length > 0 && (
-                <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                  {lowStockItems.length} items
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="px-6 py-4">
-            {lowStockItems.length > 0 ? (
-              <div className="space-y-4">
-                {lowStockItems.slice(0, 5).map((item) => (
-                  <div key={item.id} className="flex items-center justify-between py-2">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                      <p className="text-xs text-gray-500">
-                        Current: {item.quantity} | Min: {item.minThreshold}
-                      </p>
-                    </div>
-                    <div className="flex items-center">
-                      <AlertTriangle className="h-4 w-4 text-red-500 mr-2" />
-                      <span className="text-sm font-semibold text-red-600">Low Stock</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <Package className="h-12 w-12 mx-auto mb-3 text-green-300" />
-                <p className="text-green-600 font-medium">All items well stocked!</p>
-                <p className="text-sm">No low stock alerts at this time</p>
-              </div>
-            )}
-          </div>
-        </div>
+        <ExpiryAlertsPanel />
+        <AutomationPanel />
       </div>
+
+      {/* Smart Recommendations */}
+      <SmartSalesRecommendations />
 
       {/* Quick Actions */}
-      <div className="bg-white shadow-lg rounded-lg p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <button className="flex flex-col items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors duration-200">
-            <Plus className="h-8 w-8 text-blue-600 mb-2" />
-            <span className="text-sm font-medium text-blue-900">Add Item</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button className="flex items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+            <Package className="w-5 h-5 text-blue-600 mr-2" />
+            <span className="text-blue-700 font-medium">Add New Item</span>
           </button>
-          <button className="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors duration-200">
-            <ShoppingCart className="h-8 w-8 text-green-600 mb-2" />
-            <span className="text-sm font-medium text-green-900">Record Sale</span>
+          <button className="flex items-center justify-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
+            <ShoppingCart className="w-5 h-5 text-green-600 mr-2" />
+            <span className="text-green-700 font-medium">Record Sale</span>
           </button>
-          <button className="flex flex-col items-center p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors duration-200">
-            <Eye className="h-8 w-8 text-yellow-600 mb-2" />
-            <span className="text-sm font-medium text-yellow-900">View Inventory</span>
-          </button>
-          <button className="flex flex-col items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors duration-200">
-            <TrendingUp className="h-8 w-8 text-purple-600 mb-2" />
-            <span className="text-sm font-medium text-purple-900">Analytics</span>
+          <button className="flex items-center justify-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
+            <TrendingUp className="w-5 h-5 text-purple-600 mr-2" />
+            <span className="text-purple-700 font-medium">View Analytics</span>
           </button>
         </div>
       </div>
     </div>
   );
-};
-
-export default Dashboard;
+}

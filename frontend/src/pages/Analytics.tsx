@@ -9,7 +9,9 @@ import {
   Calendar,
   Eye,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Clock,
+  AlertTriangle
 } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
 import { useInventory } from '../contexts/InventoryContext';
@@ -17,8 +19,11 @@ import { formatCurrency } from '../utils/currency';
 
 const Analytics: React.FC = () => {
   const { sales, getTodaysSales, getWeeklySales, getTodaysProfit, getWeeklyProfit } = useSales();
-  const { items } = useInventory();
+  const { items, getExpiringItems, getExpiredItems, expiryAlerts } = useInventory();
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month'>('week');
+
+  const expiringItems = getExpiringItems();
+  const expiredItems = getExpiredItems();
 
   // Calculate metrics based on time range
   const getMetricsForRange = () => {
@@ -94,6 +99,7 @@ const Analytics: React.FC = () => {
   // Calculate inventory value
   const totalInventoryValue = items.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0);
   const lowStockItems = items.filter(item => item.quantity <= item.minThreshold);
+  const wasteValue = expiredItems.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0);
 
   const statCards = [
     {
@@ -127,6 +133,22 @@ const Analytics: React.FC = () => {
       changeType: metrics.profitMargin > 25 ? 'positive' as const : metrics.profitMargin > 15 ? 'neutral' as const : 'negative' as const,
       icon: BarChart3,
       color: 'bg-purple-500'
+    },
+    {
+      title: 'Expiry Alerts',
+      value: expiryAlerts.length.toString(),
+      change: expiryAlerts.length > 0 ? 'Needs attention' : 'All fresh',
+      changeType: expiryAlerts.length > 0 ? 'negative' as const : 'positive' as const,
+      icon: Clock,
+      color: expiryAlerts.length > 0 ? 'bg-orange-500' : 'bg-green-500'
+    },
+    {
+      title: 'Waste Value',
+      value: formatCurrency(wasteValue),
+      change: wasteValue > 0 ? 'Minimize waste' : 'No waste',
+      changeType: wasteValue > 0 ? 'negative' as const : 'positive' as const,
+      icon: AlertTriangle,
+      color: wasteValue > 0 ? 'bg-red-500' : 'bg-green-500'
     }
   ];
 
@@ -197,9 +219,9 @@ const Analytics: React.FC = () => {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Weekly Sales Chart */}
-        <div className="bg-white shadow-lg rounded-lg p-6">
+        <div className="bg-white shadow-lg rounded-lg p-6 lg:col-span-2">
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Weekly Sales Trend</h3>
           <div className="space-y-4">
             {weeklyData.map(({ day, amount }) => (
@@ -224,7 +246,7 @@ const Analytics: React.FC = () => {
         </div>
 
         {/* Top Selling Items */}
-        <div className="bg-white shadow-lg rounded-lg p-6">
+        <div className="bg-white shadow-lg rounded-lg p-6 lg:col-span-1">
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Top Selling Items</h3>
           {topItems.length > 0 ? (
             <div className="space-y-4">
@@ -256,7 +278,7 @@ const Analytics: React.FC = () => {
       </div>
 
       {/* Additional Insights */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="bg-white shadow-lg rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Inventory Status</h3>
@@ -302,6 +324,27 @@ const Analytics: React.FC = () => {
               }`}>
                 {metrics.profitMargin.toFixed(1)}%
               </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white shadow-lg rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Expiry Management</h3>
+            <Clock className="h-6 w-6 text-orange-500" />
+          </div>
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-500">Expiring Soon</span>
+              <span className="text-sm font-semibold text-orange-600">{expiringItems.length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-500">Expired Items</span>
+              <span className="text-sm font-semibold text-red-600">{expiredItems.length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-red-600">Waste Value</span>
+              <span className="text-sm font-semibold text-red-600">{formatCurrency(wasteValue)}</span>
             </div>
           </div>
         </div>

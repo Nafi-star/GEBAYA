@@ -1,24 +1,28 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { InventoryItem, ExpiryAlert } from '../types/inventory';
+import { 
+  calculateDaysUntilExpiry, 
+  isItemExpired, 
+  getItemPriority, 
+  sortItemsByPriority,
+  generateExpiryAlerts 
+} from '../utils/expiryUtils';
 
-interface InventoryItem {
-  id: string;
-  name: string;
-  category: string;
-  quantity: number;
-  costPrice: number;
-  sellingPrice: number;
-  minThreshold: number;
-  dateAdded: string;
-}
 
 interface InventoryContextType {
   items: InventoryItem[];
+  sortedItems: InventoryItem[];
+  expiryAlerts: ExpiryAlert[];
   addItem: (item: Omit<InventoryItem, 'id' | 'dateAdded'>) => void;
   updateItem: (id: string, updates: Partial<InventoryItem>) => void;
   deleteItem: (id: string) => void;
   updateStock: (id: string, quantityChange: number) => void;
   getLowStockItems: () => InventoryItem[];
+  getExpiringItems: () => InventoryItem[];
+  getExpiredItems: () => InventoryItem[];
   getItemById: (id: string) => InventoryItem | undefined;
+  markAsExpired: (id: string) => void;
+  applyExpiryDiscount: (id: string, discountPercentage: number) => void;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -27,9 +31,24 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [items, setItems] = useState<InventoryItem[]>(() => {
     const saved = localStorage.getItem('gebeyanet_inventory');
     if (saved) {
-      return JSON.parse(saved);
+      const parsedItems = JSON.parse(saved);
+      // Update items with expiry calculations
+      return parsedItems.map((item: any) => ({
+        ...item,
+        isExpired: item.expiryDate ? isItemExpired(item.expiryDate) : false,
+        daysUntilExpiry: item.expiryDate ? calculateDaysUntilExpiry(item.expiryDate) : undefined,
+        priority: getItemPriority(item)
+      }));
     }
     // Demo data for Ethiopian context
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 7);
+    const nextMonth = new Date(today);
+    nextMonth.setMonth(today.getMonth() + 1);
+    
     return [
       {
         id: '1',
@@ -39,7 +58,13 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         costPrice: 800,
         sellingPrice: 1000,
         minThreshold: 10,
-        dateAdded: new Date().toISOString()
+        dateAdded: new Date().toISOString(),
+        expiryDate: nextMonth.toISOString().split('T')[0],
+        batchNumber: 'TF001',
+        supplier: 'Merkato Grain Suppliers',
+        isExpired: false,
+        daysUntilExpiry: 30,
+        priority: 'low'
       },
       {
         id: '2',
@@ -49,7 +74,13 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         costPrice: 600,
         sellingPrice: 800,
         minThreshold: 10,
-        dateAdded: new Date().toISOString()
+        dateAdded: new Date().toISOString(),
+        expiryDate: tomorrow.toISOString().split('T')[0],
+        batchNumber: 'CB002',
+        supplier: 'Ethiopian Coffee Co.',
+        isExpired: false,
+        daysUntilExpiry: 1,
+        priority: 'high'
       },
       {
         id: '3',
@@ -59,7 +90,13 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         costPrice: 300,
         sellingPrice: 450,
         minThreshold: 5,
-        dateAdded: new Date().toISOString()
+        dateAdded: new Date().toISOString(),
+        expiryDate: nextWeek.toISOString().split('T')[0],
+        batchNumber: 'BS003',
+        supplier: 'Spice Market Ltd',
+        isExpired: false,
+        daysUntilExpiry: 7,
+        priority: 'medium'
       },
       {
         id: '4',
@@ -69,28 +106,69 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         costPrice: 500,
         sellingPrice: 650,
         minThreshold: 8,
-        dateAdded: new Date().toISOString()
+        dateAdded: new Date().toISOString(),
+        expiryDate: nextMonth.toISOString().split('T')[0],
+        batchNumber: 'CO004',
+        supplier: 'Oil Distributors',
+        isExpired: false,
+        daysUntilExpiry: 30,
+        priority: 'low'
       }
     ];
   });
+
+  // Calculate sorted items and expiry alerts
+  const sortedItems = sortItemsByPriority(items);
+  const expiryAlerts = generateExpiryAlerts(items);
 
   useEffect(() => {
     localStorage.setItem('gebeyanet_inventory', JSON.stringify(items));
   }, [items]);
 
+  // Auto-update expiry status daily
+  useEffect(() => {
+    const updateExpiryStatus = () => {
+      setItems(prev => prev.map(item => ({
+        ...item,
+        isExpired: item.expiryDate ? isItemExpired(item.expiryDate) : false,
+        daysUntilExpiry: item.expiryDate ? calculateDaysUntilExpiry(item.expiryDate) : undefined,
+        priority: getItemPriority(item)
+      })));
+    };
+
+    // Update immediately
+    updateExpiryStatus();
+
+    // Set up daily update
+    const interval = setInterval(updateExpiryStatus, 24 * 60 * 60 * 1000); // 24 hours
+
+    return () => clearInterval(interval);
+  }, []);
   const addItem = (itemData: Omit<InventoryItem, 'id' | 'dateAdded'>) => {
     const newItem: InventoryItem = {
       ...itemData,
       id: Date.now().toString(),
-      dateAdded: new Date().toISOString()
+      dateAdded: new Date().toISOString(),
+      isExpired: itemData.expiryDate ? isItemExpired(itemData.expiryDate) : false,
+      daysUntilExpiry: itemData.expiryDate ? calculateDaysUntilExpiry(itemData.expiryDate) : undefined,
+      priority: getItemPriority(itemData as InventoryItem)
     };
     setItems(prev => [...prev, newItem]);
   };
 
   const updateItem = (id: string, updates: Partial<InventoryItem>) => {
-    setItems(prev => prev.map(item => 
-      item.id === id ? { ...item, ...updates } : item
-    ));
+    setItems(prev => prev.map(item => {
+      if (item.id === id) {
+        const updatedItem = { ...item, ...updates };
+        return {
+          ...updatedItem,
+          isExpired: updatedItem.expiryDate ? isItemExpired(updatedItem.expiryDate) : false,
+          daysUntilExpiry: updatedItem.expiryDate ? calculateDaysUntilExpiry(updatedItem.expiryDate) : undefined,
+          priority: getItemPriority(updatedItem)
+        };
+      }
+      return item;
+    }));
   };
 
   const deleteItem = (id: string) => {
@@ -109,19 +187,50 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return items.filter(item => item.quantity <= item.minThreshold);
   };
 
+  const getExpiringItems = () => {
+    return items.filter(item => {
+      if (!item.expiryDate) return false;
+      const daysUntilExpiry = calculateDaysUntilExpiry(item.expiryDate);
+      return daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
+    });
+  };
+
+  const getExpiredItems = () => {
+    return items.filter(item => item.isExpired);
+  };
   const getItemById = (id: string) => {
     return items.find(item => item.id === id);
   };
 
+  const markAsExpired = (id: string) => {
+    updateItem(id, { 
+      isExpired: true,
+      quantity: 0 // Remove from available stock
+    });
+  };
+
+  const applyExpiryDiscount = (id: string, discountPercentage: number) => {
+    const item = getItemById(id);
+    if (item) {
+      const discountedPrice = item.sellingPrice * (1 - discountPercentage / 100);
+      updateItem(id, { sellingPrice: discountedPrice });
+    }
+  };
   return (
     <InventoryContext.Provider value={{
       items,
+      sortedItems,
+      expiryAlerts,
       addItem,
       updateItem,
       deleteItem,
       updateStock,
       getLowStockItems,
-      getItemById
+      getExpiringItems,
+      getExpiredItems,
+      getItemById,
+      markAsExpired,
+      applyExpiryDiscount
     }}>
       {children}
     </InventoryContext.Provider>
