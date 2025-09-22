@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, AlertTriangle, Clock, Package } from 'lucide-react';
 import { useInventory } from '../contexts/InventoryContext';
+import { useSales } from '../contexts/SalesContext'; // Add this import
 import { InventoryItem } from '../types/inventory';
 import { getExpiryStatus, getDaysUntilExpiry, getPriorityLevel } from '../utils/expiryUtils';
 
@@ -10,22 +11,23 @@ interface RecordSaleModalProps {
 }
 
 export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClose }) => {
-  const { items, recordSale } = useInventory();
+  const { items } = useInventory(); // Only get items from InventoryContext
+  const { recordSale } = useSales(); // Get recordSale from SalesContext
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [unitPrice, setUnitPrice] = useState(0);
+  const [salePrice, setSalePrice] = useState(0);
   const [customerName, setCustomerName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sort items by priority (expired/expiring first)
   const sortedItems = [...items].sort((a, b) => {
-    const aPriority = getPriorityLevel(a.expiryDate);
-    const bPriority = getPriorityLevel(b.expiryDate);
+    const aPriority = getPriorityLevel(a.expiryDate || '');
+    const bPriority = getPriorityLevel(b.expiryDate || '');
     
-    // Convert priority to numeric for sorting (High=3, Medium=2, Low=1)
-    const priorityValues = { 'High': 3, 'Medium': 2, 'Low': 1 };
-    return priorityValues[bPriority] - priorityValues[aPriority];
+    // Convert priority to numeric for sorting (high=3, medium=2, low=1)
+    const priorityValues = { 'high': 3, 'medium': 2, 'low': 1 };
+    return priorityValues[bPriority as keyof typeof priorityValues] - priorityValues[aPriority as keyof typeof priorityValues];
   });
 
   const filteredItems = sortedItems.filter(item =>
@@ -35,7 +37,7 @@ export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClos
 
   useEffect(() => {
     if (selectedItem) {
-      setUnitPrice(selectedItem.price);
+      setSalePrice(selectedItem.sellingPrice);
     }
   }, [selectedItem]);
 
@@ -47,17 +49,19 @@ export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClos
     try {
       await recordSale({
         itemId: selectedItem.id,
+        itemName: selectedItem.name,
         quantity,
-        unitPrice,
-        customerName: customerName.trim() || 'Walk-in Customer',
-        timestamp: new Date(),
-        totalAmount: quantity * unitPrice
+        salePrice: salePrice,
+        costPrice: selectedItem.costPrice, // Add costPrice
+        totalAmount: quantity * salePrice,
+        profit: (salePrice - selectedItem.costPrice) * quantity,
+        // Remove date and customerName since SalesContext doesn't expect them
       });
 
       // Reset form
       setSelectedItem(null);
       setQuantity(1);
-      setUnitPrice(0);
+      setSalePrice(0);
       setCustomerName('');
       setSearchTerm('');
       onClose();
@@ -69,8 +73,8 @@ export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClos
   };
 
   const getExpiryWarning = (item: InventoryItem) => {
-    const status = getExpiryStatus(item.expiryDate);
-    const daysUntil = getDaysUntilExpiry(item.expiryDate);
+    const status = getExpiryStatus(item.expiryDate || '');
+    const daysUntil = getDaysUntilExpiry(item.expiryDate || '');
     
     if (status === 'expired') {
       return {
@@ -92,11 +96,11 @@ export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClos
 
   const getPriorityBadge = (priority: string) => {
     const colors = {
-      'High': 'bg-red-100 text-red-800',
-      'Medium': 'bg-orange-100 text-orange-800',
-      'Low': 'bg-green-100 text-green-800'
+      'high': 'bg-red-100 text-red-800',
+      'medium': 'bg-orange-100 text-orange-800',
+      'low': 'bg-green-100 text-green-800'
     };
-    return colors[priority as keyof typeof colors] || colors.Low;
+    return colors[priority as keyof typeof colors] || colors.low;
   };
 
   if (!isOpen) return null;
@@ -107,7 +111,11 @@ export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClos
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Record Sale</h2>
           <button
-            onClick={onClose}
+            onClick={() => {
+              onClose();
+              setSelectedItem(null);
+              setSearchTerm('');
+            }}
             className="text-gray-500 hover:text-gray-700 transition-colors"
           >
             <X className="w-6 h-6" />
@@ -140,7 +148,7 @@ export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClos
               ) : (
                 filteredItems.map((item) => {
                   const warning = getExpiryWarning(item);
-                  const priority = getPriorityLevel(item.expiryDate);
+                  const priority = getPriorityLevel(item.expiryDate || '');
                   
                   return (
                     <div
@@ -159,7 +167,7 @@ export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClos
                             </span>
                           </div>
                           <p className="text-sm text-gray-600">
-                            Stock: {item.quantity} | Price: ${item.price.toFixed(2)}
+                            Stock: {item.quantity} | Price: ${item.sellingPrice.toFixed(2)}
                           </p>
                           {item.expiryDate && (
                             <p className="text-xs text-gray-500">
@@ -214,7 +222,7 @@ export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClos
                     min="1"
                     max={selectedItem.quantity}
                     value={quantity}
-                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   />
@@ -231,8 +239,8 @@ export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClos
                     type="number"
                     step="0.01"
                     min="0"
-                    value={unitPrice}
-                    onChange={(e) => setUnitPrice(parseFloat(e.target.value) || 0)}
+                    value={salePrice}
+                    onChange={(e) => setSalePrice(Math.max(0, parseFloat(e.target.value) || 0))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   />
@@ -256,7 +264,13 @@ export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClos
                 <div className="flex justify-between items-center">
                   <span className="font-medium text-gray-700">Total Amount:</span>
                   <span className="text-xl font-bold text-green-600">
-                    ${(quantity * unitPrice).toFixed(2)}
+                    ${(quantity * salePrice).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-2 text-sm text-gray-600">
+                  <span>Estimated Profit:</span>
+                  <span className={`font-medium ${(salePrice - selectedItem.costPrice) * quantity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    ${((salePrice - selectedItem.costPrice) * quantity).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -267,19 +281,29 @@ export const RecordSaleModal: React.FC<RecordSaleModalProps> = ({ isOpen, onClos
           <div className="flex gap-3 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                onClose();
+                setSelectedItem(null);
+                setSearchTerm('');
+              }}
               className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={!selectedItem || quantity <= 0 || isSubmitting}
+              disabled={!selectedItem || quantity <= 0 || quantity > (selectedItem?.quantity || 0) || isSubmitting}
               className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
               {isSubmitting ? 'Recording...' : 'Record Sale'}
             </button>
           </div>
+
+          {selectedItem && quantity > selectedItem.quantity && (
+            <div className="text-red-600 text-sm text-center">
+              Cannot sell more than available stock
+            </div>
+          )}
         </form>
       </div>
     </div>

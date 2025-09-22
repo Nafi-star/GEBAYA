@@ -15,11 +15,14 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({ isOpen, onClose, i
     name: '',
     category: '',
     quantity: 0,
-    price: 0,
-    description: '',
+    costPrice: 0,
+    sellingPrice: 0,
+    minThreshold: 0,
+    maxThreshold: undefined as number | undefined,
     expiryDate: '',
     batchNumber: '',
-    supplier: ''
+    supplier: '',
+    description: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -29,11 +32,14 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({ isOpen, onClose, i
         name: item.name,
         category: item.category,
         quantity: item.quantity,
-        price: item.price,
-        description: item.description || '',
-        expiryDate: item.expiryDate ? new Date(item.expiryDate).toISOString().split('T')[0] : '',
+        costPrice: item.costPrice,
+        sellingPrice: item.sellingPrice,
+        minThreshold: item.minThreshold,
+        maxThreshold: item.maxThreshold,
+        expiryDate: item.expiryDate || '',
         batchNumber: item.batchNumber || '',
-        supplier: item.supplier || ''
+        supplier: item.supplier || '',
+        description: item.description || ''
       });
     }
   }, [item]);
@@ -45,8 +51,17 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({ isOpen, onClose, i
     setIsSubmitting(true);
     try {
       await updateItem(item.id, {
-        ...formData,
-        expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : undefined
+        name: formData.name,
+        category: formData.category,
+        quantity: formData.quantity,
+        costPrice: formData.costPrice,
+        sellingPrice: formData.sellingPrice,
+        minThreshold: formData.minThreshold,
+        maxThreshold: formData.maxThreshold,
+        expiryDate: formData.expiryDate || undefined,
+        batchNumber: formData.batchNumber || undefined,
+        supplier: formData.supplier || undefined,
+        description: formData.description || undefined
       });
       onClose();
     } catch (error) {
@@ -60,8 +75,11 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({ isOpen, onClose, i
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'quantity' ? parseInt(value) || 0 : 
-              name === 'price' ? parseFloat(value) || 0 : value
+      [name]: name === 'quantity' || name === 'minThreshold' || name === 'maxThreshold' ? 
+                parseInt(value) || 0 : 
+              name === 'costPrice' || name === 'sellingPrice' ? 
+                parseFloat(value) || 0 : 
+                value
     }));
   };
 
@@ -140,12 +158,12 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({ isOpen, onClose, i
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 <DollarSign className="w-4 h-4 inline mr-1" />
-                Price ($)
+                Selling Price ($)
               </label>
               <input
                 type="number"
-                name="price"
-                value={formData.price}
+                name="sellingPrice"
+                value={formData.sellingPrice}
                 onChange={handleChange}
                 step="0.01"
                 min="0"
@@ -153,6 +171,56 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({ isOpen, onClose, i
                 required
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <DollarSign className="w-4 h-4 inline mr-1" />
+                Cost Price ($)
+              </label>
+              <input
+                type="number"
+                name="costPrice"
+                value={formData.costPrice}
+                onChange={handleChange}
+                step="0.01"
+                min="0"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <Hash className="w-4 h-4 inline mr-1" />
+                Min Threshold
+              </label>
+              <input
+                type="number"
+                name="minThreshold"
+                value={formData.minThreshold}
+                onChange={handleChange}
+                min="0"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Max Threshold (Optional)
+            </label>
+            <input
+              type="number"
+              name="maxThreshold"
+              value={formData.maxThreshold || ''}
+              onChange={handleChange}
+              min="0"
+              placeholder="Optional"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
 
           <div>

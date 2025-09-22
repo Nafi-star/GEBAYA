@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { 
   BarChart3, 
   TrendingUp, 
-  TrendingDown, 
   DollarSign, 
   Package, 
   ShoppingCart,
@@ -11,16 +10,23 @@ import {
   ArrowUp,
   ArrowDown,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  Trash2,
+  Filter,
+  Search,
+  CheckCircle
 } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
 import { useInventory } from '../contexts/InventoryContext';
 import { formatCurrency } from '../utils/currency';
 
 const Analytics: React.FC = () => {
-  const { sales, getTodaysSales, getWeeklySales, getTodaysProfit, getWeeklyProfit } = useSales();
-  const { items, getExpiringItems, getExpiredItems, expiryAlerts } = useInventory();
+  const { sales, getTodaysSales, getWeeklySales } = useSales();
+  const { items, getExpiringItems, getExpiredItems, expiryAlerts, updateItemQuantity, removeItem } = useInventory();
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month'>('week');
+  const [xStockTab, setXStockTab] = useState<'expired' | 'expiring' | 'reports'>('expired');
+  const [quantityToRemove, setQuantityToRemove] = useState<{[key: string]: number}>({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   const expiringItems = getExpiringItems();
   const expiredItems = getExpiredItems();
@@ -58,7 +64,7 @@ const Analytics: React.FC = () => {
 
   // Get top selling items
   const getTopSellingItems = () => {
-    const itemSales: { [key: string]: { name: string, quantity: number, revenue: number } } = {};
+    const itemSales: { [key: string]: { name: string; quantity: number; revenue: number } } = {};
     
     sales.forEach(sale => {
       if (!itemSales[sale.itemName]) {
@@ -78,28 +84,69 @@ const Analytics: React.FC = () => {
     const weekData: { [key: string]: number } = {};
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     
-    // Initialize all days with 0
     days.forEach(day => {
       weekData[day] = 0;
     });
 
     const weekSales = getWeeklySales();
     weekSales.forEach(sale => {
-      const dayName = days[new Date(sale.date).getDay()];
-      weekData[dayName] += sale.total;
+      const saleDate = new Date(sale.date);
+      if (!isNaN(saleDate.getTime())) {
+        const dayName = days[saleDate.getDay()];
+        weekData[dayName] += sale.total;
+      }
     });
 
     return Object.entries(weekData).map(([day, amount]) => ({ day, amount }));
   };
 
+  // XStock Functions
+  const handleQuantityChange = (itemId: string, value: number) => {
+    setQuantityToRemove(prev => ({
+      ...prev,
+      [itemId]: Math.max(0, Math.min(value, items.find(item => item.id === itemId)?.quantity || 0))
+    }));
+  };
+
+  const handleRemoveExpired = (itemId: string) => {
+    const quantity = quantityToRemove[itemId] || 0;
+    if (quantity > 0) {
+      updateItemQuantity(itemId, -quantity);
+      setQuantityToRemove(prev => {
+        const newState = { ...prev };
+        delete newState[itemId];
+        return newState;
+      });
+    }
+  };
+
+  const handleRemoveAllExpired = () => {
+    expiredItems.forEach(item => {
+      removeItem(item.id);
+    });
+    setQuantityToRemove({});
+  };
+
+  const filteredExpiredItems = expiredItems.filter(item => 
+    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredExpiringItems = expiringItems.filter(item => 
+    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   const topItems = getTopSellingItems();
   const weeklyData = getWeeklySalesData();
-  const maxWeeklyAmount = Math.max(...weeklyData.map(d => d.amount));
+  const maxWeeklyAmount = Math.max(...weeklyData.map(d => d.amount), 1);
 
   // Calculate inventory value
   const totalInventoryValue = items.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0);
   const lowStockItems = items.filter(item => item.quantity <= item.minThreshold);
   const wasteValue = expiredItems.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0);
+
+  // Calculate waste reduction metrics
+  const totalWastePrevention = items.reduce((sum, item) => sum + (((item as any).quantityReducedDueToExpiry ?? 0) * item.costPrice), 0);
+  const itemsWithWasteReduction = items.filter(item => ((item as any).quantityReducedDueToExpiry ?? 0) > 0).length;
 
   const statCards = [
     {
@@ -163,10 +210,10 @@ const Analytics: React.FC = () => {
           </div>
           <div className="mt-4 sm:mt-0">
             <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
               <select
                 value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value as any)}
+                onChange={(e) => setTimeRange(e.target.value as 'today' | 'week' | 'month')}
                 className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
               >
                 <option value="today">Today</option>
@@ -206,7 +253,7 @@ const Analytics: React.FC = () => {
                       <ArrowDown className="h-4 w-4 text-red-500 mr-1" />
                     ) : null}
                     <span className={
-                      stat.changeType === 'positive' ? 'text-green-600' : 
+                      stat.changeType === 'positive' ? 'text-green-600' :
                       stat.changeType === 'negative' ? 'text-red-600' : 'text-gray-500'
                     }>
                       {stat.change}
@@ -219,6 +266,200 @@ const Analytics: React.FC = () => {
         })}
       </div>
 
+      {/* XStock Management Section */}
+      <div className="bg-white shadow-lg rounded-lg p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">XStock - Expiry Management</h2>
+            <p className="text-gray-600">Manage expired and expiring items to reduce waste</p>
+          </div>
+          <div className="flex space-x-2 mt-4 sm:mt-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search items..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <select
+                value={xStockTab}
+                onChange={(e) => setXStockTab(e.target.value as 'expired' | 'expiring' | 'reports')}
+                className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
+              >
+                <option value="expired">Expired Items</option>
+                <option value="expiring">Expiring Soon</option>
+                <option value="reports">Waste Reports</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {xStockTab === 'expired' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Expired Items</h3>
+              {filteredExpiredItems.length > 0 && (
+                <button
+                  onClick={handleRemoveAllExpired}
+                  className="flex items-center px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Remove All Expired
+                </button>
+              )}
+            </div>
+            
+            {filteredExpiredItems.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Quantity</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remove Quantity</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredExpiredItems.map((item) => (
+                      <tr key={item.id} className="bg-red-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{item.name}</div>
+                          <div className="text-sm text-gray-500">Cost: {formatCurrency(item.costPrice)}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {item.quantity}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="number"
+                            min="0"
+                            max={item.quantity}
+                            value={quantityToRemove[item.id] || 0}
+                            onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value) || 0)}
+                            className="w-20 px-2 py-1 border border-gray-300 rounded-md"
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => handleRemoveExpired(item.id)}
+                            disabled={!quantityToRemove[item.id] || quantityToRemove[item.id] <= 0}
+                            className="text-red-600 hover:text-red-900 disabled:text-gray-400 disabled:cursor-not-allowed"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3" />
+                <p className="text-gray-500">No expired items found</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {xStockTab === 'expiring' && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Items Expiring Soon (within 7 days)</h3>
+            
+            {filteredExpiringItems.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredExpiringItems.map((item) => {
+                      const expiryDate = item.expiryDate ? new Date(item.expiryDate) : null;
+                      const today = new Date();
+                      const diffDays = expiryDate && !isNaN(expiryDate.getTime())
+                        ? Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+                        : null;
+                      
+                      return (
+                        <tr key={item.id} className="bg-orange-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{item.name}</div>
+                            <div className="text-sm text-gray-500">Cost: {formatCurrency(item.costPrice)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {expiryDate ? expiryDate.toLocaleDateString() : 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {item.quantity}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">
+                              {diffDays !== null ? `Expires in ${diffDays} days` : 'No expiry date'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3" />
+                <p className="text-gray-500">No items expiring soon</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {xStockTab === 'reports' && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Waste Management Reports</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="bg-red-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-red-800 mb-2">Current Waste Status</h4>
+                <p className="text-red-600">Potential Waste Value: {formatCurrency(wasteValue)}</p>
+                <p className="text-red-600">Expired Items: {expiredItems.length}</p>
+                <p className="text-red-600">Items Expiring Soon: {expiringItems.length}</p>
+              </div>
+              
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-green-800 mb-2">Waste Prevention</h4>
+                <p className="text-green-600">Total Waste Prevented: {formatCurrency(totalWastePrevention)}</p>
+                <p className="text-green-600">Items With Waste Reduction: {itemsWithWasteReduction}</p>
+                <p className="text-green-600">Last Reduction: {new Date().toLocaleDateString()}</p>
+              </div>
+            </div>
+            
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <h4 className="font-semibold text-gray-800 mb-2">Waste Reduction Tips</h4>
+              <ul className="list-disc list-inside text-gray-600 space-y-1">
+                <li>Regularly check expiry dates and prioritize selling items nearing expiration</li>
+                <li>Implement a FIFO (First-In, First-Out) system for inventory management</li>
+                <li>Consider discounts for items approaching their expiry date</li>
+                <li>Track which items frequently expire to adjust purchasing quantities</li>
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Weekly Sales Chart */}
         <div className="bg-white shadow-lg rounded-lg p-6 lg:col-span-2">
@@ -228,13 +469,13 @@ const Analytics: React.FC = () => {
               <div key={day} className="flex items-center">
                 <div className="w-12 text-sm font-medium text-gray-600">{day}</div>
                 <div className="flex-1 mx-4">
-                  <div className="bg-gray-200 rounded-full h-3 relative">
-                    <div
-                      className="bg-green-500 h-3 rounded-full transition-all duration-500"
-                      style={{ 
-                        width: maxWeeklyAmount > 0 ? `${(amount / maxWeeklyAmount) * 100}%` : '0%' 
-                      }}
-                    />
+                  <div className="relative">
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div
+                        className="bg-green-500 h-3 rounded-full transition-all duration-500"
+                        style={{ width: maxWeeklyAmount > 0 ? `${(amount / maxWeeklyAmount) * 100}%` : '0%' }}
+                      ></div>
+                    </div>
                   </div>
                 </div>
                 <div className="w-20 text-right text-sm font-semibold text-gray-900">

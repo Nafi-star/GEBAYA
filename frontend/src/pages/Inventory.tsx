@@ -11,8 +11,6 @@ import {
   TrendingUp,
   Clock,
   ArrowUp,
-  ArrowDown,
-  Calendar,
   Bolt,
   TrendingDown
 } from 'lucide-react';
@@ -20,10 +18,10 @@ import { useInventory } from '../contexts/InventoryContext';
 import { formatCurrency } from '../utils/currency';
 import { getExpiryStatusColor, getExpiryStatusText } from '../utils/expiryUtils';
 import AddItemModal from '../components/AddItemModal';
-import EditItemModal from '../components/EditItemModal';
+import { EditItemModal } from '../components/EditItemModal'; // Changed to named import
 
 const Inventory: React.FC = () => {
-  const { items, sortedItems, deleteItem, getLowStockItems, getExpiringItems, getExpiredItems, markAsExpired, applyExpiryDiscount } = useInventory();
+  const { items, sortedItems, deleteItem, getLowStockItems, getExpiringItems, markAsExpired, applyExpiryDiscount } = useInventory();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBy, setFilterBy] = useState<'all' | 'low-stock' | 'in-stock' | 'expiring' | 'expired'>('all');
   const [sortBy, setSortBy] = useState<'priority' | 'name' | 'quantity' | 'expiry'>('priority');
@@ -32,7 +30,8 @@ const Inventory: React.FC = () => {
 
   const lowStockItems = getLowStockItems();
   const expiringItems = getExpiringItems();
-  const expiredItems = getExpiredItems();
+  // Remove unused expiredItems variable since it's not used
+  // const expiredItems = getExpiredItems();
 
   const getFilteredAndSortedItems = () => {
     let filtered = sortBy === 'priority' ? sortedItems : items;

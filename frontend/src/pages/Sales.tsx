@@ -12,7 +12,7 @@ import {
 import { useSales } from '../contexts/SalesContext';
 import { useInventory } from '../contexts/InventoryContext';
 import { formatCurrency } from '../utils/currency';
-import RecordSaleModal from '../components/RecordSaleModal';
+import { RecordSaleModal } from '../components/RecordSaleModal';
 
 const Sales: React.FC = () => {
   const { sales, getTodaysSales, getWeeklySales, getTodaysProfit, getWeeklyProfit } = useSales();
@@ -45,9 +45,12 @@ const Sales: React.FC = () => {
   };
 
   const filteredSales = getFilteredSales();
+  
+  // Add fallback values to handle undefined properties
   const displayProfit = dateFilter === 'today' ? todaysProfit : dateFilter === 'week' ? weeklyProfit : 
-    sales.reduce((sum, sale) => sum + sale.profit, 0);
-  const displayRevenue = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
+    sales.reduce((sum, sale) => sum + (sale.profit || 0), 0);
+  
+  const displayRevenue = filteredSales.reduce((sum, sale) => sum + (sale.totalAmount || sale.total || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -104,7 +107,7 @@ const Sales: React.FC = () => {
               <div className="ml-3">
                 <p className="text-sm font-medium text-purple-900">Items Sold</p>
                 <p className="text-2xl font-bold text-purple-600">
-                  {filteredSales.reduce((sum, sale) => sum + sale.quantity, 0)}
+                  {filteredSales.reduce((sum, sale) => sum + (sale.quantity || 0), 0)}
                 </p>
               </div>
             </div>
@@ -178,13 +181,17 @@ const Sales: React.FC = () => {
                       <div className="text-sm font-medium text-gray-900">{sale.itemName}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{sale.quantity}</div>
+                      <div className="text-sm text-gray-900">{sale.quantity || 0}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{formatCurrency(sale.unitPrice)}</div>
+                      <div className="text-sm text-gray-900">
+                        {formatCurrency(sale.salePrice || sale.unitPrice)}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{formatCurrency(sale.total)}</div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {formatCurrency(sale.totalAmount || sale.total)}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-green-600">

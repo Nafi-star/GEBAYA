@@ -11,6 +11,7 @@ export interface InventoryItem {
   expiryDate?: string;
   batchNumber?: string;
   supplier?: string;
+  description?: string;
   isExpired: boolean;
   daysUntilExpiry?: number;
   priority: 'high' | 'medium' | 'low';
@@ -24,6 +25,25 @@ export interface ExpiryAlert {
   daysUntilExpiry: number;
   quantity: number;
   alertType: 'expired' | 'expiring_soon' | 'expiring_this_week';
+}
+
+export interface Sale {
+  id: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  salePrice: number;
+  totalAmount: number;
+  date: string;
+  profit: number;
+  customerName?: string; // Added optional customerName
+}
+
+export interface AutomationSettings {
+  autoReorder: boolean;
+  expiryAlerts: boolean;
+  lowStockAlerts: boolean;
+  profitTracking: boolean;
 }
 
 export interface InventoryContextType {
